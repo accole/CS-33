@@ -1,6 +1,6 @@
 *All Credit Should be Given to Paul Eggert, UCLA for this assignment*
 
-Homework Problems 2.63, 2.72, and 2.82 from Bryant & O'Hallaron 3rd Ed., with the following changes and additions:
+Homework Problems 2.63, 2.72, 2.73, and 2.82 from Bryant & O'Hallaron 3rd Ed., with the following changes and additions:
 
 
 - In problem 2.63, the types of functions should be long and unsigned long, not int and unsigned.
