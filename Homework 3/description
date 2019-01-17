@@ -1,1 +1,10 @@
 *All Credit Should be Given to Paul Eggert, UCLA for this assignment*
+
+Homework 3:
+
+Problems 3.68 and 3.70. Submit the answers as plain ASCII text files named 3.68.txt and 3.70.txt. Briefly show your work.
+
+One more thing. C11 allows declarations to have an alignment specifier. For example, 'int _Alignas (8) n;' acts just 
+like 'int n;', except that it arranges for n's alignment to be 8 instead of the default int alignment of 4. Assuming 
+the x86-64, what value does the C expression 'sizeof (struct { char a; char _Alignas (8) b; char c; })' return and why? 
+Briefly explain in a plain ASCII text file _Alignas.txt.
