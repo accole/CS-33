@@ -1,0 +1,59 @@
+Adam Cole
+
+testovf:
+
+
+_Bool testovf(long n){
+      return n + 9223372036854775807 < n;
+}
+
+
+
+(1)	-O2
+
+	<testovf>:
+	0:    31 c0	xor	%eax, %eax
+	2:    c3	ret
+
+	      		*will always return 0
+
+
+
+(2)     -O2 -fwrapv
+
+	<testovf>:
+	0:   48 b8 ff ff ff ff ff	movabs $0x7fffffffffffffff, %rax
+	7:   ff ff 7f			
+	a:   48 01 f8			add    %rdi, %rax
+	d:   48 39 f8			cmp    %rdi, %rax
+	10:  0f 9c c0			setl   %al
+	13:  c3				ret
+
+
+
+(3)     -O2 -fsanitize=undefined
+
+	<testovf>:
+	0:    31 c0	xor %eax, %eax
+	2:    c3	ret
+
+	      		*will always return 0, 
+			 like the original compilation in (1)
+
+
+
+-02 is an optimization tag that will make the machine code as fast as
+possible.  Since the compiler will know that the number will always overflow,
+the compiler can optimize the code to immediatley return 0.  
+
+
+-02 -fwrapv will cause the overflow to wrap around and avoid any overflow
+checks, and this is why the assembly code must go through the computation and 
+comparison to determine the boolean.
+
+
+Running -02 -fsanitize=undefined causes a bug and will return the
+same machine code as just running -02.  As prof. Eggert described in the 
+Optimization lecture, -fsanitize=undefined should make the optimization
+of return n + 9223372036854775807 < n unsafe and crash if anything happens.
+Therefore it should be different than -02.
