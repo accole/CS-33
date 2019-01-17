@@ -1,1 +1,11 @@
 this assignment:
+
+Homework Problems 2.63, 2.72, and 2.82 from Bryant & O'Hallaron 3rd Ed., with the following changes and additions:
+
+
+- In problem 2.63, the types of functions should be long and unsigned long, not int and unsigned.
+- Redo 2.73, this time using a call to __builtin_add_overflow_p function avilable in GCC 7 and later; the third
+  argument of the call should be a cast that consists of a parenthesized type followed by the constant 0.
+- In problem 2.82, also analyze the following:
+    F.    x >> 1 == (ux >> 1) + (ux & (-1 << 31))
+    G.    x % 8 == (x & 7)
