@@ -1,0 +1,55 @@
+2.82 - Adam Cole
+
+A.
+		(x<y) == (-x>-y)
+The above expression will NOT always return true, in the case of
+x = TMin.  In this case, -x will still equal TMin, while y will be flipped.
+TMin < -10 = true, (TMin > 10) = false.
+	
+B.
+		((x+y)<<4)+y-x == 17*y+15*x
+The expression above will always return true.  (x+y)<<4 is equivalent to
+x<<4 + y<<4.  Therefore the left side will be equivalent to x<<4 - x + y<<4 + y.
+17*y is equivalent to y<<4 + y and 15*x converts to x<<4 - x.  Therefore the right
+side will be equivalent to x<<4 - x + y<<4 + y.  the left side is equivalent to the 
+right side.
+
+C.
+		~x+~y+1 == ~(x+y)
+The expression will always return true.  We prove this through the identity
+~x = -x-1.  Therefore the left hand side equates to (-x-1)+(-y-1)+1, which further
+reduces to -1-(x+y).  using the same identity as above, -1-(x+y)=~(x+y).
+
+D.
+		(ux-uy) == -(unsigned)(y-x)
+The expression above will always return true.  ux and uy are both unsigned
+integers, but regardless of their type casting (when y turned to uy and x casted to ux
+also) the bit representation of the numbers will never change, and therefore they will
+always equal since they both end up unsigned and have the same equation.
+
+E.
+		((x>>2)<<2)<=x
+The expression above will always return true because the right and left
+shifts will always ensure it is less than the original.  Once x is divided by 4
+through the right shift x>>2, x will lose some of its least significant bits.  
+When mulitplied back by 4 through the left shift x<<2, it will always be less
+than the original value, or equal.
+
+F.
+		x>>1 == (ux>>1)+(ux&(-1<<31))
+First, -1<<31 is equivalent to shifting -1 = 1111 1111 1111 1111 1111 1111 1111
+1111 left by 31 places, making it 1000 0000 0000 0000 0000 0000 0000 0000.  Performing
+the bitwise operator & between this and ux will return a 0 if x was positive and 1 if x
+was negative.  Since the bit representation of x and ux never changes between signed and
+unsigned conversions, right shifting x>>1 and ux>>1 will both be equivalent if the most 
+significant digit of x is a 0 (is x is positive), and unequivalent if it was a 1 (if x
+is negative).  Therefore, for positive x's it will be x>>1 = ux>>1 + 0 (correct), and for
+negative x's it will be x>>1 = ux>>1 + 1000 0000 0000 0000, etc. (correct).  Therefore the
+above expression will always return true.
+
+G.
+		x%8 == (x&7)
+x&7 will represent the last 3 bits of x, since they will only copy
+over if both bits in x and in 7 are 1.  x%8 however, will return the remainder
+after diving x by 8, or 2^3; the first three bits.  therefore, the expression 
+above will always return true.
