@@ -1,0 +1,40 @@
+Adam Cole
+
+3.68
+
+A = 9
+B = 5
+
+
+work:
+
+movslq 8(%rsi),%rax	move int 8 bytes into q -> rax
+addq   32(%rsi),%rax	add long 32 bytes into q to rax -> rax
+movq   %rax, 184(%rdi)	move rax into 184 bytes into p -> rdi
+ret    	     		return rax
+
+from this assembly code, we find out the following:
+     q->t 	   is aligned 8 bytes into q
+     q->u	   is aligned 32 bytes into q
+     p->y	   is aligned 184 bytes into p
+
+when we use this information combined with the struct definitions:
+     q = {  char array[B];   1 x B = B
+       	    int t;	     4 x 1 = 4 (aligned 4)	8 bytes in
+	    short s[A];	     2 x A = 2A
+	    long u; }	     8 x 1 = 8 (aligned 8)	32 bytes in
+	    
+
+     p = {  int x[A][B];     4 x A x B = 4AB
+       	    long y; }	     8 x 1 = 8 (aligned 8)	184 bytes in
+
+using alignment rules and the size of each data type, we find
+      4 < B <= 8
+      6 < A <= 10
+and
+      44 < AB <= 46
+
+
+The only values of A and B that follow these inequalities are:
+    A = 9
+    B = 5
