@@ -1,0 +1,22 @@
+Adam Cole
+
+_Alignas.txt
+
+Q:
+
+what value does the C expression 
+     
+     sizeof(struct{char a; char _Alignas(8) b; char c;});
+
+return and why?
+
+A:
+
+It will return 16 bytes because the first character will be at 
+byte 1, and because char b is now aligned to 8, there will be 7 bytes of
+junk to make char b be at byte 8, and the last character c will then be
+at byte 9, since it's alignment is still inherently 1 byte.  Since the
+biggest data member of this struct takes 8 Bytes, the alignment of the whole 
+struct is also 8 Bytes, so 7 bytes of junk will padd the rest of the struct.  
+The sizeof() operator returns the size of the struct, therefore, returning 
+16 Bytes - a multiple of the alignment.
