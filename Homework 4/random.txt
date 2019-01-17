@@ -1,0 +1,61 @@
+Adam Cole
+
+Random.txt
+
+2.89:
+
+Given:	int	32 bit Two's Complement
+	float	32 bit IEEE
+	double	64 bit IEEE
+
+//creat random integers
+int x = random();
+int y = random();
+int z = random();
+//convert to double
+double dx = (double) x;
+double dy = (double) y;
+double dz = (double) z;
+
+				Which of the following always return 1?
+
+	A)	(float) x == (float) dx
+
+The above expression will ALWAYS return 1 because when an integer is converted
+to a double, no bits will be lost along the way since doubles can hold more
+information than integers. Therefore, when both int x and double dx are 
+converted to a float, the rounding behavior of the two conversions will be
+the same.
+
+	B)	dx - dy == (double) (x - y)
+
+The above representation will NOT always return 1 because the doubles dx - dy
+can hold more information than the integers x and y.  For example, let's say
+int x was initialized to INT_MIN, and y was initialized to any number > 0.
+In this case, dx - dy will return the correct result because a double is able
+to represent numbers smaller than INT_MIN, however integers x - y will over
+flow and wrap around to a positive number (since we assume fwrapv).  When this
+is then type casted to a double, the representation is incorrect.
+
+	C)	(dx + dy) + dz == dx + (dy + dz)
+
+The above expression will ALWAYS return 1.  Although floating points are not
+associative due to rounding and precision problems, even if x, y, and z are 
+all initialized to INT_MAX, the double will still be able to represent this
+number.
+
+	D)	(dx * dy) * dz == dx * (dy * dz)
+
+The above expression will NOT always return 1.  Floating point arithmetic
+is not associative due to rounding and precision issues, and therefore 
+(dx * dy) * dz could be a different number than dx * (dy * dz).  Specifically,
+after dx * dy, floating point arithmetic will round that result to an even
+number, and then again after (dx * dy) * dz.  When the two sides of the 
+statement experience different rounding, and then multiplication after
+that rounding, the two sides will not be equal.
+
+	E)	dx / dx == dz / dz
+
+The above expression will NOT always return 1.  consider the circumstance 
+where dx was 0 and dy was an arbitrary constant C.  Then 0/0 == C/C would
+return 0 since NaN != 1.
