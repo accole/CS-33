@@ -1,0 +1,187 @@
+Adam Cole
+
+Pexex Lab:
+
+
+(1) Gathering traces:
+
+
+    - I first run emacs -Q -batch -eval '(print(* 1250284240 
+-1844255039))' and gcc returns 2305843008625102544 to see the output.
+
+
+    - Once in the debugger, I set a breakpoint at the function Ftimes
+and run the evaluation r emacs -Q -batch -eval '(print(* 1250284240
+-1844255039))'.  Once stopped, I use the command info line to get
+the beginning and ending address of the function Ftimes, which is
+0x54e0f0 to 0x54e100 and line 2943 in data.c.   The assembly code output
+from the dissassembly of these addresses were: disas
+<Ftimes>:
+54e0f0	0:   mov	%rsi, %rdx
+54e0f3  3:   mov	%rdi, %rsi
+54e0f6  6:   mov	$0x2, %edi
+54e0fb 11:   jmpq	0x54dea0 <arith_driver>
+
+
+     - Ftimes is only called once in the execution because GDB will only
+stop one time when a breakpoint is placed at Ftimes (0x54dea0) even after
+using (gdb) cont.  When we inspect this line with info line, we find:
+Lisp_Object Ftimes(ptrdiff_t, Lisp_Object *);	  at line:2943
+
+
+     - I then set breakpoints at each of the addresses in Ftimes, and check the
+register values using info reg to find the addresses being moved.  Now,
+<Ftimes>:
+54e0f0	mov	%rsi,%rdx	rdx = 0x7fffffffc7e0
+54e0f3	mov	%rdi,%rsi	rsi = 0x2
+54e0f6	mov	$0x2,%edi	//then what does this do if 0x2 is already in rdi?
+54e0fb	jmpq	0x54dea0 <arith_driver>	    rip = 0x54dea0
+
+
+	- And then followed the rip pointer to the rest of the code in bits.c,
+using info line *0x54dea0, or stepi, I recieve the start and end addresses: 0x54dea0 to 
+0x54dee8.  Disassembling this code with disas 0x54dea0, 0x54dee8:
+54dea0	   push		 %r15 	   //pushes %r15-r%12, %rbp, and %rbx onto rsp
+54dea2	   push		 %r14	   
+54dea4	   push		 %r13
+54dea4	   push		 %r12
+54dea6	   push		 %rbp
+54dea9	   push		 %rbx
+54deaa	   sub		 $0x18,%rsp	//decrease the stack pointer
+54deae	   cmp		 $0x2,%edi	//set condition flags by  %edi - $0x2
+54dea1	   jb		 0x54e068 <arith_driver+456> ****     //jump to +456
+54deb7	   mov		 $0x1,%ebp	//mov $0x1 to ebp
+54debc	   cmp		 $0x3,%edi	//set cond flags by %edi - $0x3
+54debf	   jbe		 0x54dece <arith_driver+46> **** //jump to +46
+54deb1	   xor		 %ebp,%ebp	//clears ebp
+54dec3	   cmp		 $0x4,%edi	//set cond flags by %edi-$0x4 (0-4)
+54dec6	   setne	 %bpl		//ZF=0 after 0-4, so bpl = $0x4
+54deca	   sub		 $0x1,%rbp	//subtract 1 from %rbp
+54dece	   test		 %rsi,%rsi	//set cond flags by %rsi&%rsi
+54decl	   jle		 0x54e014 <arith_driver+372> **** //jump to +372
+54ded7	   mov		 %rdx,%r14
+54deda	   mov		 %edi,%r12d
+54dedd	   mov		 %rbp,%rcx
+54ded0	   xor		 %ebx,%ebx	//clears %ebx
+54dee2	   xor		 %r15d,%r15d	//clears %r15d
+54dee5	   xor		 %r13d,%r13d	//clears %r13d
+In order to find all the indirect code called by Ftimes, we must trace 
+through the remainder of the code after Ftimes until we find the return
+statment.  Furthermore, we can use info regs of the used registers at 
+any of these addresses to inspect how rsp changes.  After each push 
+instruction is executed, using the command (gdb) x (address of rsp)
+returns the value of the register that was pushed on the stack,
+which we denote as M8[addr rsp]=value.
+
+
+       - Using stepi followed by info reg while I turn set logging on, I
+get the value of all the registers at every step, and the rip pointer
+indicates the addresses the program goes through:87.
+
+
+       - I follow the code to 0x54e014 <arith_driver+372>. Using info line
+*0x54e014, and then reading the machine instructions using the command
+(gdb) x /9i prints the next 9 machine instructions:
+54e014	   lea	       	0x2,(,%rbp,4),%rax
+54e01c	   add		$0x18,%rsp	//increment rsp stack pointer
+54e020	   pop		%rbx		//first in, last out
+54e021	   pop		%rbp
+54e022	   pop		%r12
+54e024	   pop		%r13
+54e026	   pop		%r14
+54e028	   pop		%r15		
+54e02a	   retq				//return
+which brings us to the end of the indirect machine instructions from
+the call of Ftimes.  For each pop instruction, info reg tells me the 
+value of the rsp register.
+
+
+       - In order to get the hexadecimal representation of the assembly
+code above, I used the command (gdb) set disassemble-next-line on and
+put breakpoints at all the different addresses.  When the program stops,
+the next line disassembles with the hex code and assembly.
+
+
+       - For all the above code, I step through the addresses using 
+(gdb) stepi, and at each address I trace the movement of memory through 
+(gdb) info reg.  This completes my trace of the test case.
+
+
+       - To get an idea of the amount of overhead used by emacs, we use the 
+gdb command backtrace in order to see a summary of the flow of the program 
+before the Ftimes call.  I find:
+#0  54e0f0   Ftimes(nargs = 2, args=0x7fffffffc7e0)  line:2943
+#1  564b2d   eval_sub(form=<>)			     line:1862
+#2  564804   eval_sub(form=form@entry=17525667)	     line:2222
+#3  5664db   Feval(form=17525667, lexical=<>) 	     line:2054
+#4  5628b8   Ffuncall(nargs=<>,args@entry=0x7fffffffca50)	line:1862
+#5  5976c3   exec_byte_code(bytestr=<>, vector=9863741, maxdepth<>, args_temp<>
+   	    	nargs@entry=8, args<>, args@entry=687fffffffd0f0)   line:629
+#6  564dad   funcall_lambda(fun=140737488341632, nargs=8, nargs@entry=1,
+   	    	arg_vector=0x687fffffffd0f0, arg_vector@entry=0x7fffffffd0f0)
+		line:1614
+#7  56283b   Ffuncall(nargs=2, args=args@entry=0x7fffffffd0e8)	line:2783
+#8  5976c3   exec_byte_code(bytestr<>, vector=9841205, maxdepth<>, args_temp<>,
+   	    	nargs=nargs@entry7, args<>, args@entry=0x87fffffffda58)
+		line:0629
+#9  564dad   funcall_lambda(fun=140737488343440, nargs=7, nargs@entry=0,
+   	    	arg_vector=0x87fffffffda58, arg_vector@entry=0x7fffffffda58)
+		line:1614
+#10 56283b   Ffuncall(nargs=1, args=args@entry=0x7fffffffda50)	line:2783
+#11 5976c3   exec_byte_code(bytestr=<>, vector=9837605, maxdepth=<>, args_temp=<>,
+    	     	nargs=nargs@entry=5, args=<>, args@entry=0x277fffffffde00)
+		line:0629
+#12 564dad   funcall_lambda(fun=140737488345768, fun@entry=9837525, nargs=5,
+    	     	nargs@entry=0, arg_vector=0x277fffffffde00,
+		arg_vector@entry=0x7fffffffde00)	line:1614
+#13 565196   apply_lambda(fun=9837525, args=<>, count=count@entry=4)    line:2906
+#14 56473d   eval_sub(form=form@entry=17760611)		line:2309
+#15 5664db   Feval(form=17760611, lexical<>)		line:2054
+#16 561aee   internal_condition_case(bfun=bfun@entry=0x4f01e0 <top_level_2>,
+		handlers=handlers@entry=21072, hfun=hfun@entry=0x4f52e0,
+		<cmd_error>)				line:1332
+#17 4f128c   top_level_1(ingore=ignore@entry=0)		line:0855
+#18 561a5d   internal_catch(tag=tag@entry=50928, func=func@entry=0x4f1230
+    	     	<top_level_1>, arg=arg@entry=0)		line:1097
+#19 4f0163   command_loop()				line:0855
+#20 4f4ed3   recursive_edit_1()				line:0695
+#21 4f5208   Frecursive_edit()				line:0766
+#22 41a4c9   main(argc=6, argv=0x7fffffffe198)		line:1713
+With each of the #'s as a function or an execution.  Therefore, we can see
+that emacs imposes a large amount of overhead before the execution of
+the * Elisp operation takes place.
+
+
+
+(2) Examine integer overflow handling:
+
+
+    - in order to compile the function using the different commands,
+I created  a .c file called integer.c in which I wrote the testovf
+function.  I compiled with with gcc and then used objdump -d (file).o
+command to view the assembly code made by the compiler.  I used the
+following compiler commands:
+	  - gcc -c -O2 integer.c
+	  - gcc -c -O2 -fwrapv integer.c
+	  - gcc -c -O2 -fsanitize=undefined
+both gcc -c -O2 integer.c and gcc -c -O2 -fwrapv integer.c compiled
+cleanly and put the assembly language into integer.o.  The last
+command, gcc -c -O2 -fsanitize=undefined resulted in an error,
+however, and gcc said it couldn't recognize the -fsanitize=undefined
+command.
+
+
+    - The assembly code for gcc -c -O2 integer.c returned assembly
+code that will always return the value of 0.  Why will _Bool testovf
+always return 0 in gcc?
+
+
+    - After consulting piazza, I then run this command instead of the
+previous one: /usr/local/cs/bin/gcc -c -O2 -fsanitize=undefined integer.o
+which returned identical assembly code as the normal gcc -c -O2 
+compilation.  Is is suppossed to be different or the same?
+
+
+    - On piazza @126, instructor Varun Saboo said that if you get the same
+assembly code for -O2 -fsanitize=undefined and for -O2 then it will be
+acceptable.
