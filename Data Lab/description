@@ -1,1 +1,6 @@
 *All Credit Should be Given to Paul Eggert, UCLA for this assignment*
+
+Data Lab:
+
+Your goal is to modify your copy of bits.c so that it passes all the 
+tests in btest without violating any of the coding guidelines.
