@@ -1,0 +1,425 @@
+Adam Cole
+
+
+openmplab.txt
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+								#1 Identifying the Bottlenecks
+
+Beginning the Lab, I download the tar.gz file from CCLE and unzip it in Linux:
+	$ tar xvzf openmplab.tgz
+
+I compile the sequential version to recieve the initial run times:
+	$ make clean
+	$ make seq
+	$ ./seq
+
+		FUNC TIME : 0.740158
+		TOTAL TIME : 2.682802
+
+I then analyze the program to find bottlenecks in the program and the kernel:
+	$ make seq GPROF=1
+	$ gprof seq | less
+
+		Flat profile:
+
+		Each sample counts as 0.01 seconds.
+		  %   cumulative   self              self     total           
+		 time   seconds   seconds    calls  ms/call  ms/call  name    
+		 65.26      0.58     0.58       15    38.72    41.97  func1	******
+		 25.88      0.81     0.23  5177344     0.00     0.00  rand2
+		  3.38      0.84     0.03   491520     0.00     0.00  findIndexBin
+		  1.13      0.85     0.01       15     0.67     0.67  func4	******
+		  1.13      0.86     0.01        2     5.01     5.01  init
+		  1.13      0.87     0.01        1    10.01    10.01  imdilateDisk
+		  1.13      0.88     0.01                             sequence
+		  0.56      0.89     0.01   983042     0.00     0.00  round
+		  0.56      0.89     0.01        1     5.01     5.01  elapsed_time
+		  0.00      0.89     0.00       16     0.00     0.00  dilateMatrix
+		  0.00      0.89     0.00       15     0.00     0.00  func2	******
+		  0.00      0.89     0.00       15     0.00     0.00  func3	******
+		  0.00      0.89     0.00       15     0.00     2.00  func5	******
+		  0.00      0.89     0.00       15     0.00     0.00  rand1
+		  0.00      0.89     0.00        2     0.00     0.00  get_time
+		  0.00      0.89     0.00        1     0.00   186.58  addSeed
+		  0.00      0.89     0.00        1     0.00     0.00  fillMatrix
+		  0.00      0.89     0.00        1     0.00     0.00  func0	******
+		  0.00      0.89     0.00        1     0.00     0.00  getNeighbors
+
+In this lab, we are only allowed to modify func1 - func5 in func.c.
+
+Clearly, the kernel is located in func1 because the program spends the most time in 
+func1.  In order to garner the most effective speedup, I must optimize func1 and to 
+get even faster I must then optimize func2 and func4, since those are the functions
+that the program spends the next most amount of time on.
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+								#2 Optimizing the Kernel
+
+In func.c, I find func1:
+
+	void func1(int *seed, int *array, double *arrayX, double *arrayY,
+				double *probability, double *objxy, int *index,
+				int Ones, int iter, int X, int Y, int Z, int n)
+	{
+		int i, j;
+	   	int index_X, index_Y;
+		int max_size = X*Y*Z;
+	
+	   	for(i = 0; i < n; i++){
+	   		arrayX[i] += 1 + 5*rand2(seed, i);
+	   		arrayY[i] += -2 + 2*rand2(seed, i);
+	   	}
+	
+	   	for(i = 0; i<n; i++){
+	   		for(j = 0; j < Ones; j++){
+	   			index_X = round(arrayX[i]) + objxy[j*2 + 1];
+	   			index_Y = round(arrayY[i]) + objxy[j*2];
+	   			index[i*Ones + j] = fabs(index_X*Y*Z + index_Y*Z + iter);
+	   			if(index[i*Ones + j] >= max_size)
+	   				index[i*Ones + j] = 0;
+	   		}
+	   		probability[i] = 0;
+	
+	   		for(j = 0; j < Ones; j++) {
+	   			probability[i] += (pow((array[index[i*Ones + j]] - 100),2) -
+	   					 pow((array[index[i*Ones + j]]-228),2))/50.0;
+	   		}
+	   		probability[i] = probability[i]/((double) Ones);
+	   	}
+	}
+
+The first thing I notice to hoist is the variables used in both the outer and nested for loop.  
+Variables int Ones, iter, Y, Z, n are arguments #8 - #13 of func1, meaning that the values of these
+inputs are not stored in registers, but rather placed on the stack.  For every reference to these 
+variables, the compiler will have to access the stack - therefore we should create a new temp variable
+in order to store these frequently used values in registers:	(m_Ones, m_n)
+
+I also "hoist" out the type cast in the second for loop by using a temp variable double d. 
+
+I eliminate the dead code probablility[i] = __; that appears multiple times because probablility[i]
+is continuously updated.  I do this by adding a temp variable that will be updated through the for 
+loops and then written into memory rather than the whole time.
+
+I also use this same tactic for the continuous array accessing for Index[i*m_ones + j], using
+temp variables int indx to hold the index and int val to hold the value of memory at index indx.
+
+I also utilize my temp variables and change the if() statement in the double for loop to the
+(condition) if : else; syntax to make it a conditional move instruction.
+
+Lastly, I change the j*2 code to (j << 1) since shifting is much faster than multiplying even
+though both can be done in one machine instruction:
+
+
+	void func1(int *seed, int *array, double *arrayX, double *arrayY,
+				double *probability, double *objxy, int *index,
+				int Ones, int iter, int X, int Y, int Z, int n)
+	{
+		int m_Ones = Ones;
+		double d = (double) Ones;
+		int m_n = n;
+		
+		int indx, val;
+
+		int i, j;
+	   	int index_X, index_Y;
+		int max_size = X*Y*Z;
+
+	   	for(i = 0; i < m_n; i++){
+	   		arrayX[i] += 1 + 5*rand2(seed, i);
+	   		arrayY[i] += (rand2(seed, i) * 2) - 2;
+	   	}
+	
+		double p;
+		
+	   	for(i = 0; i< m_n; i++){
+
+			indx = i*m_Ones;
+	   		for(j = 0; j < m_Ones; j++){
+				index_X = round(arrayX[i]) + objxy[(j << 1) + 1];
+	   			index_Y = round(arrayY[i]) + objxy[j << 1];
+	   			val = fabs(index_X*Y*Z + index_Y*Z + iter);
+				index[indx + j] = ( val >= max_size ) ? 0 : val;
+	   		}
+			
+			p = 0;
+	
+	   		for(j = 0; j < m_Ones; j++) {
+				val = array[index[indx + j]];
+	   			p += (pow((val-100),2) - pow((val-228),2))/50.0;
+	   		}
+	   		probability[i] = p / d;
+	   	}
+	}
+
+After optimizing my code, I then use the OpenMP parallelism software to create a multi-threaded
+program to run my for loops as quickly as possible.  I do this by adding OpenMP commands to func1:
+
+	void func1(int *seed, int *array, double *arrayX, double *arrayY,
+				double *probability, double *objxy, int *index,
+				int Ones, int iter, int X, int Y, int Z, int n)
+	{
+		int m_Ones = Ones;
+		double d = (double) Ones;
+		int m_n = n;
+		double p;
+		
+		int indx, val;
+
+		int i, j;
+	   	int index_X, index_Y;
+		int max_size = X*Y*Z;
+
+	#pragma omp parallel for num_threads(30) firstprivate(seed, m_n, arrayX, arrayY) private(i)
+
+	   	for(i = 0; i < m_n; i++){
+	   		arrayX[i] += 1 + 5*rand2(seed, i);
+	   		arrayY[i] += (rand2(seed, i) * 2) - 2;
+	   	}
+		
+	#pragma omp parallel for num_threads(30) firstprivate(m_Ones, m_n, iter, Y, Z, max_size, arrayX,
+arrayY, objxy, index, array) private(i, j, index_X, index_Y, indx, val)
+
+	   	for(i = 0; i< m_n; i++){
+
+			indx = i*m_Ones;
+	   		for(j = 0; j < m_Ones; j++){
+				index_X = round(arrayX[i]) + objxy[(j << 1) + 1];
+	   			index_Y = round(arrayY[i]) + objxy[j << 1];
+	   			val = fabs(index_X*Y*Z + index_Y*Z + iter);
+				index[indx + j] = ( val >= max_size ) ? 0 : val;
+	   		}
+			
+			p = 0;
+	
+	   		for(j = 0; j < m_Ones; j++) {
+				val = array[index[indx + j]];
+	   			p += (pow((val-100),2) - pow((val-228),2))/50.0;
+	   		}
+	   		probability[i] = p / d;
+	   	}
+	}
+
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+								#3 Optimizing func2
+
+I next analyze func2:
+
+	void func2(double *weights, double *probability, int n)
+	{
+		int i;
+		double sumWeights=0;
+	
+		for(i = 0; i < n; i++)
+	   		weights[i] = weights[i] * exp(probability[i]);
+	
+	   	for(i = 0; i < n; i++)
+	   		sumWeights += weights[i];
+	
+		for(i = 0; i < n; i++)
+	   		weights[i] = weights[i]/sumWeights;
+	}
+
+The three for loops can be combined into two without changing the correctness.
+
+Additionally, a temp variable can be used to continuously update weights[i] without accessing
+the memory at i every time.
+
+	void func2(double *weights, double *probability, int n)
+	{
+		int i;
+		double sumWeights = 0;
+		double temp;
+	
+		for(i = 0; i < n; i++) {
+	   		temp = weights[i] * exp(probability[i]);
+			sumWeights += temp;
+			weights[i] = temp;
+		}
+		for(i = 0; i < n; i++)
+	   		weights[i] /= sumWeights;
+	}
+
+After optimizing my code, I then use the OpenMP parallelism software to create a multi-threaded
+program to run my for loops as quickly as possible.  I do this by adding OpenMP commands to func2:
+
+	void func2(double *weights, double *probability, int n)
+	{
+		int i;
+		double sumWeights = 0;
+		double temp;	
+
+	#pragma omp parallel for num_threads(30) firstprivate(n, weights, probability) private(i,
+temp) reduction(+:sumWeights)
+
+		for(i = 0; i < n; i++) {
+			temp = weights[i] * exp(probability[i]);
+			sumWeights += temp;
+			weights[i] = temp;
+		}
+
+	#pragma omp parallel for num_threads(30) firstprivate(n, weights, sumWeights) private(i)
+	
+		for(i = 0; i < n; i++)
+	   		weights[i] /= sumWeights;
+	}
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+								#4 Optimizing func4
+
+I finally analyze func4:
+
+	void func4(double *u, double u1, int n)
+	{
+		int i;
+	
+		for(i = 0; i < n; i++){
+	   		u[i] = u1 + i/((double)(n));
+	   	}
+	}
+
+I initially realize that the compiler is type casting (double) n at each run through
+the for loop.  To fix this, I modify the code to be:
+
+	void func4(double *u, double u1, int n)
+	{
+		int i;
+		double d = (double) n;
+		for(i = 0; i < n; i++){
+	   		u[i] = u1 + i/d;
+	   	}
+	}
+
+After optimizing my code, I then use the OpenMP parallelism software to create a multi-threaded
+program to run my for loops as quickly as possible.  I do this by adding OpenMP commands to func4:
+
+	void func4(double *u, double u1, int n)
+	{
+		int i;
+		double d = (double) n;
+
+	#pragma omp parallel for num_threads(30) firstprivate(n, u, u1, d) private(i)
+
+		for(i = 0; i < n; i++){
+	   		u[i] = u1 + i/d;
+	   	}
+	}
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+								#5 Calculating the Speedup
+
+After optimizing func1, func2, and func3, also I calculate the the new run time with 
+OpenMP enabled:
+	$ make clean
+	$ make omp
+	$ ./omp
+
+		FUNC TIME : 0.093063
+		TOTAL TIME : 2.253284
+
+The formula to calculate the overall speedup is:
+	S_p = T_1 / T_p
+
+Using the function times from before (./seq) and after optimization (both my edits to func1, 
+func2, func4, and using OpenMP):
+	S_p = 0.740158 / 0.089211 = 8.296712
+
+The speedup was 8.3x, which exceeds the 3.5x required by the lab spec.
+
+On Piazza, TA Varun explained "The speeds will fluctuate as more people test their code 
+simultaneously on the server. While grading I will ensure that every submission is run 
+independently without any interference to obtain the maximum possible speedup. "
+Therefore note:  my times on this lab may differ when run independantly from all other
+students on the server.
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+								#6 Checking for Errors
+
+Now I must check for correctness:
+	$ make check
+
+		gcc -o omp  -O3 -fopenmp filter.c main.c func.c util.c -lm
+		cp omp filter
+		./filter
+		FUNC TIME : 0.097247
+		TOTAL TIME : 2.189931
+		diff --brief correct.txt output.txt
+
+Outputs nothing, therefore the program is still correct.
+
+And then I check for any memory leaks:
+	$ make omp MTRACE=1
+	$ ./omp
+	$ make checkmem
+
+		mtrace filter mtrace.out || true
+
+		Memory not freed:
+		-----------------
+		           Address     Size     Caller
+		0x00000000029bb100   0x1e90  at 0x7feb2d2597f9
+		0x00000000029bcfa0     0xc0  at 0x7feb2d2597f9
+		0x00000000029bd070     0xf8  at 0x7feb2d259849
+		0x00000000029bd170    0x240  at 0x7feb2d78a885
+		0x00000000029bd3c0    0x240  at 0x7feb2d78a885
+		0x00000000029bd610    0x240  at 0x7feb2d78a885
+		0x00000000029bd860    0x240  at 0x7feb2d78a885
+		0x00000000029bdab0    0x240  at 0x7feb2d78a885
+		0x00000000029bdd00    0x240  at 0x7feb2d78a885
+		0x00000000029bdf50    0x240  at 0x7feb2d78a885
+		0x00000000029be1a0    0x240  at 0x7feb2d78a885
+		0x00000000029be3f0    0x240  at 0x7feb2d78a885
+		0x00000000029be640    0x240  at 0x7feb2d78a885
+		0x00000000029be890    0x240  at 0x7feb2d78a885
+		0x00000000029beae0    0x240  at 0x7feb2d78a885
+		0x00000000029bed30    0x240  at 0x7feb2d78a885
+		0x00000000029bef80    0x240  at 0x7feb2d78a885
+		0x00000000029bf1d0    0x240  at 0x7feb2d78a885
+		0x00000000029bf420    0x240  at 0x7feb2d78a885
+		0x00000000029bf670    0x240  at 0x7feb2d78a885
+		0x00000000029bf8c0    0x240  at 0x7feb2d78a885
+		0x00000000029bfb10    0x240  at 0x7feb2d78a885
+		0x00000000029bfd60    0x240  at 0x7feb2d78a885
+		0x00000000029bffb0    0x240  at 0x7feb2d78a885
+		0x00000000029c0200    0x240  at 0x7feb2d78a885
+		0x00000000029c0450    0x240  at 0x7feb2d78a885
+		0x00000000029c06a0    0x240  at 0x7feb2d78a885
+		0x00000000029c08f0    0x240  at 0x7feb2d78a885
+		0x00000000029c0b40    0x240  at 0x7feb2d78a885
+		0x00000000029c0d90    0x240  at 0x7feb2d78a885
+		0x00000000029c0fe0    0x240  at 0x7feb2d78a885
+		0x00000000029c1230    0x240  at 0x7feb2d78a885
+
+From TA Varun on Piazza:
+"Openmp by default has memory leakage bugs. If you get this error when you make with omp, 
+you can ignore it. However, if you get an error when you make with seq, then you'll be deducted
+points.  Additionally, as long as the output (when using make omp) is memory not freed, 
+it's okay."
+
+When I check the memory leaks when running ./seq:
+	$ make seq MTRACE=1
+	$ ./seq
+	$ make checkmem
+
+		mtrace filter mtrace.out || true
+
+		No memory leaks.
+
+Therefore my program runs according to the spec.
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
