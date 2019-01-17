@@ -1,0 +1,28 @@
+Adam Cole
+
+answer.txt
+
+12.17:
+
+	a)
+		In the main thread exit(0) is directly called after pthread_create
+		and therefore the thread does not wait for its peer threads to run
+		to completion.  The program returns with exit code: 0 before the 
+		created thread could reach the printf line.
+
+	b)
+		to fix the bug, we can replace exit(0) with pthread_join(tid, NULL)
+		since pthread_join interrupts the execution of the original thread
+		and waits until the specified thread terminates before running to
+		completion itself. 
+
+
+
+12.25:
+
+	echo_cnt is thread_safe because it uses mutex synchronization to protect the
+	access to global variable byte_cnt which is shared (also called semaphores).  
+	echo_cnt is not reentrant, however, because according to the definition of
+	reentrant, echo_cnt must not reference any global (shared) variables, which
+	it does.
+
