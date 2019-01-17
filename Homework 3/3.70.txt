@@ -1,0 +1,27 @@
+Adam Cole
+
+3.70
+
+A)	offset		variable
+	  0		e1.p
+	  8		e1.y
+	  0		e2.x
+	  8		e2.next
+	  
+e1.p and e2.x are both at offset 0 just like e1.y and e2.next
+are both at offset 8 because for unions, all data members start 
+at the same bit, 0.  it is up to the user to determine whether 
+the data in the union represents e1 or e2.
+
+B)
+
+The union has a size equivalent to 16 bytes.  While both structures
+are size 16, just as in part A, the 16 bytes can represent e1 or e2
+and it is up to the caller to know which structure the 16 bytes
+represent.
+
+C)
+
+void proc (union ele *up){
+     up->e2.x = *(up->e2.next->e1.p)-(up->e2.next->e1.y);
+}
