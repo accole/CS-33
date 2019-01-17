@@ -1,0 +1,14 @@
+2.72 - Adam Cole
+
+A.
+	maxbytes-sizeof(val)>=0 will always return true because, since 
+SizeOf() returns a value of type size_t, an unsigned integer.  When a signed
+integer is operated against an unsigned one, the result will always be
+of type unsigned.  Therefore, the expression will never be negative.
+
+
+B.
+	void copy_int(int val, void *buf, int maxbytes) {
+	     if (maxbytes >= 0 && maxbytes >= sizeof(val))
+	     	memcpy(buf,(void*) &val, sizeof(val));
+	}
