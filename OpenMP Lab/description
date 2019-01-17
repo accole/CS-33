@@ -1,5 +1,12 @@
 *All Credit Should be Given to Paul Eggert, UCLA for this assignment*
 
+
+OpenMP Lab:
+
+The basic idea is to use OpenMP to make a program go faster.
+
+--------------------------------------------------------------
+
 Files:
 
 Your lab handout contains the following files:
